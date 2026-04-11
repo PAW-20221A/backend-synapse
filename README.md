@@ -1,5 +1,5 @@
 # Synapse — Backend
-
+#Estive aqui. Prof. Rondineli Seba Salomão
 API REST da plataforma Synapse, responsável por autenticação, geração de quizzes via LLM e condução de sessões de estudo com agente tutor.
 
 ## Funcionalidades
