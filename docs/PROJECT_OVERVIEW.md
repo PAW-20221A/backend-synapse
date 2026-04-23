@@ -2,7 +2,7 @@
 
 ## 1. Descricao Geral
 
-Plataforma web voltada para estudos que transforma videos do YouTube em quizzes de aprendizado. O backend recebe uma transcricao, usa um agente LLM para gerar resumo e flashcards, e depois registra sessoes simples de resposta sem tutor agent.
+Plataforma web voltada para estudos que transforma videos do YouTube em quizzes de aprendizado. O backend extrai uma transcricao limpa, usa um agente LLM para gerar resumo e flashcards, e depois registra sessoes simples de resposta sem tutor agent.
 
 ## 2. Stack
 
@@ -13,7 +13,7 @@ Plataforma web voltada para estudos que transforma videos do YouTube em quizzes 
 | Banco de dados | PostgreSQL |
 | ORM | SQLAlchemy |
 | LLM | Agno + OpenAI/Groq |
-| API externa | SubTubly API |
+| API externa | TranscriptAPI |
 | Autenticacao | JWT |
 | Containerizacao | Docker + Docker Compose |
 
@@ -22,7 +22,7 @@ Plataforma web voltada para estudos que transforma videos do YouTube em quizzes 
 ### 3.1 Geracao de Quiz
 
 1. Usuario autenticado envia a URL do video e a quantidade de perguntas desejada.
-2. O backend obtem uma transcricao e chama o `quiz_agent`.
+2. O backend obtem uma transcricao limpa via TranscriptAPI e chama o `quiz_agent`.
 3. O `quiz_agent` retorna um JSON com `summary` e `flashcards`.
 4. Cada flashcard contem `question`, `options`, `correct_answer` e `explanations`.
 5. O backend salva quiz e flashcards e retorna o resultado completo.
@@ -91,6 +91,12 @@ GET  /api/auth/me
 POST /api/quiz/generate
 GET  /api/quiz/{id}
 GET  /api/quiz/
+```
+
+### Transcript
+
+```text
+POST /api/transcript
 ```
 
 ### Sessions
