@@ -1,7 +1,7 @@
 import unittest
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 
@@ -9,7 +9,8 @@ from app.models.flashcard import Flashcard
 from app.models.quiz import Quiz
 from app.models.session import SessionAnswer, StudySession
 from app.models.user import User
-from app.routers.quiz import get_quiz, list_quizzes
+from app.models.video import Video
+from app.routers.quiz import generate_quiz, get_quiz, list_quizzes
 from app.routers.sessions import (
     finish_session,
     get_session,
@@ -17,7 +18,11 @@ from app.routers.sessions import (
     start_session,
     submit_answer,
 )
+from app.routers.transcript import get_transcript as fetch_transcript
+from app.schemas.quiz import GenerateQuizRequest, QuizResponse
 from app.schemas.session import AnswerRequest, StartSessionRequest
+from app.schemas.transcript import TranscriptRequest
+from app.services.transcript_api import TranscriptResult
 
 
 def build_query_mock(*, all_result=None, first_result=None, count_result=None):
@@ -202,3 +207,130 @@ class RouteBehaviorTests(unittest.TestCase):
             get_quiz(uuid.uuid4(), db=db, current_user=self.user)
 
         self.assertEqual(ctx.exception.status_code, 404)
+
+
+class AsyncRouteBehaviorTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.user = User(
+            id=uuid.uuid4(),
+            email="user@example.com",
+            password_hash="hashed",
+            name="User",
+        )
+        self.video = Video(
+            id=uuid.uuid4(),
+            youtube_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            youtube_id="dQw4w9WgXcQ",
+            title="Video Title",
+            transcript="Texto limpo da transcricao",
+            language="en",
+        )
+        self.transcript_result = TranscriptResult(
+            youtube_id=self.video.youtube_id,
+            youtube_url=self.video.youtube_url,
+            title=self.video.title,
+            language=self.video.language,
+            transcript=self.video.transcript,
+            video=self.video,
+        )
+
+    async def test_get_transcript_returns_clean_text_and_metadata(self):
+        db = MagicMock()
+
+        with patch(
+            "app.routers.transcript.transcript_service.get_transcript",
+            new=AsyncMock(return_value=self.transcript_result),
+        ) as mocked_get_transcript:
+            response = await fetch_transcript(
+                TranscriptRequest(url=self.video.youtube_url),
+                db=db,
+                current_user=self.user,
+            )
+
+        self.assertEqual(response.youtube_id, self.video.youtube_id)
+        self.assertEqual(response.title, self.video.title)
+        self.assertEqual(response.transcript, self.video.transcript)
+        mocked_get_transcript.assert_awaited_once()
+
+    async def test_generate_quiz_creates_quiz_and_flashcards(self):
+        db = MagicMock()
+        quiz_payload = {
+            "summary": "Resumo gerado",
+            "flashcards": [
+                {
+                    "question": "Pergunta 1",
+                    "options": ["A", "B", "C", "D"],
+                    "correct_answer": 1,
+                    "explanations": ["EA", "EB", "EC", "ED"],
+                },
+                {
+                    "question": "Pergunta 2",
+                    "options": ["A2", "B2", "C2", "D2"],
+                    "correct_answer": 2,
+                    "explanations": ["E1", "E2", "E3", "E4"],
+                },
+            ],
+        }
+        expected_response = QuizResponse(
+            id=uuid.uuid4(),
+            video_id=self.video.id,
+            user_id=self.user.id,
+            summary="Resumo gerado",
+            flashcards=[],
+        )
+
+        def assign_quiz_id():
+            added_quiz = db.add.call_args.args[0]
+            added_quiz.id = expected_response.id
+
+        db.flush.side_effect = assign_quiz_id
+
+        with patch(
+            "app.routers.quiz.transcript_service.get_transcript",
+            new=AsyncMock(return_value=self.transcript_result),
+        ) as mocked_transcript, patch(
+            "app.routers.quiz.generate_quiz_from_transcript",
+            new=AsyncMock(return_value=quiz_payload),
+        ) as mocked_agent, patch(
+            "app.routers.quiz._serialize_quiz",
+            return_value=expected_response,
+        ) as mocked_serialize:
+            response = await generate_quiz(
+                GenerateQuizRequest(url=self.video.youtube_url, question_count=2),
+                db=db,
+                current_user=self.user,
+            )
+
+        created_quiz = db.add.call_args.args[0]
+        created_flashcards = db.add_all.call_args.args[0]
+
+        self.assertEqual(response.id, expected_response.id)
+        self.assertEqual(created_quiz.video_id, self.video.id)
+        self.assertEqual(created_quiz.user_id, self.user.id)
+        self.assertEqual(created_quiz.summary, "Resumo gerado")
+        self.assertEqual([item.position for item in created_flashcards], [1, 2])
+        self.assertEqual(created_flashcards[0].question, "Pergunta 1")
+        self.assertEqual(created_flashcards[1].correct_answer, 2)
+        mocked_transcript.assert_awaited_once()
+        mocked_agent.assert_awaited_once_with(self.video.transcript, 2)
+        mocked_serialize.assert_called_once()
+        db.commit.assert_called_once()
+
+    async def test_generate_quiz_returns_502_when_agent_payload_is_invalid(self):
+        db = MagicMock()
+
+        with patch(
+            "app.routers.quiz.transcript_service.get_transcript",
+            new=AsyncMock(return_value=self.transcript_result),
+        ), patch(
+            "app.routers.quiz.generate_quiz_from_transcript",
+            new=AsyncMock(side_effect=ValueError("invalid payload")),
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                await generate_quiz(
+                    GenerateQuizRequest(url=self.video.youtube_url, question_count=2),
+                    db=db,
+                    current_user=self.user,
+                )
+
+        self.assertEqual(ctx.exception.status_code, 502)

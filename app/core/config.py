@@ -20,9 +20,9 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
-    # SubTubly
-    subtubly_api_url: str = "https://api.subtubly.com"
-    subtubly_api_key: str = ""
+    # Transcript API
+    transcript_api_base_url: str = "https://transcriptapi.com/api/v2"
+    transcript_api_key: str = ""
 
     # LLM
     openai_api_key: str = ""

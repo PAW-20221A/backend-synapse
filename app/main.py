@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import create_tables
-from app.routers import auth, quiz, sessions
+from app.routers import auth, quiz, sessions, transcript
 
 
 @asynccontextmanager
@@ -32,6 +32,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(quiz.router)
 app.include_router(sessions.router)
+app.include_router(transcript.router)
 
 
 @app.get("/health", tags=["health"])

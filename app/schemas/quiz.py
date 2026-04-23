@@ -1,11 +1,11 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class GenerateQuizRequest(BaseModel):
-    url: str
-    question_count: int = 5
+    url: str = Field(min_length=1)
+    question_count: int = Field(default=5, ge=1)
 
 
 class FlashcardResponse(BaseModel):
