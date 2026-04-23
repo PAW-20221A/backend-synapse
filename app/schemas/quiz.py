@@ -13,7 +13,7 @@ class FlashcardResponse(BaseModel):
     question: str
     options: list[str]
     correct_answer: int
-    explanation: str
+    explanations: list[str]
     position: int | None
 
     model_config = {"from_attributes": True}

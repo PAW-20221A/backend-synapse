@@ -15,7 +15,9 @@ class AnswerRequest(BaseModel):
 
 class AnswerResponse(BaseModel):
     is_correct: bool
-    feedback: str
+    correct_answer: int
+    selected_explanation: str
+    correct_explanation: str
 
 
 class SessionResponse(BaseModel):
