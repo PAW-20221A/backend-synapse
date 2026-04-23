@@ -15,5 +15,5 @@ class Flashcard(Base):
     question: Mapped[str] = mapped_column(Text, nullable=False)
     options: Mapped[list] = mapped_column(JSONB, nullable=False)
     correct_answer: Mapped[int] = mapped_column(Integer, nullable=False)
-    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    explanations: Mapped[list] = mapped_column(JSONB, nullable=False)
     position: Mapped[int | None] = mapped_column(Integer)
