@@ -1,28 +1,26 @@
 import json
 
-from agno.agent import Agent
-from agno.models.openai import OpenAIChat
 from pydantic import BaseModel, ValidationError, model_validator
 
 from app.core.config import settings
 
-QUIZ_SYSTEM_PROMPT = """VocÃª Ã© um especialista em criar materiais de estudo.
-Dado uma transcriÃ§Ã£o de vÃ­deo, gere um resumo e um conjunto de flashcards no formato JSON abaixo.
+QUIZ_SYSTEM_PROMPT = """Voce e um especialista em criar materiais de estudo.
+Dada uma transcricao de video, gere um resumo e um conjunto de flashcards no formato JSON abaixo.
 Responda APENAS com o JSON, sem texto adicional.
 
 Formato:
 {
-  "summary": "Resumo conciso do conteÃºdo...",
+  "summary": "Resumo conciso do conteudo...",
   "flashcards": [
     {
-      "question": "Pergunta sobre o conteÃºdo?",
-      "options": ["OpÃ§Ã£o A", "OpÃ§Ã£o B", "OpÃ§Ã£o C", "OpÃ§Ã£o D"],
+      "question": "Pergunta sobre o conteudo?",
+      "options": ["Opcao A", "Opcao B", "Opcao C", "Opcao D"],
       "correct_answer": 0,
       "explanations": [
-        "ExplicaÃ§Ã£o da OpÃ§Ã£o A",
-        "ExplicaÃ§Ã£o da OpÃ§Ã£o B",
-        "ExplicaÃ§Ã£o da OpÃ§Ã£o C",
-        "ExplicaÃ§Ã£o da OpÃ§Ã£o D"
+        "Explicacao da Opcao A",
+        "Explicacao da Opcao B",
+        "Explicacao da Opcao C",
+        "Explicacao da Opcao D"
       ]
     }
   ]
@@ -64,15 +62,30 @@ def validate_quiz_payload(payload: dict, question_count: int | None = None) -> d
 
 async def generate_quiz_from_transcript(transcript: str, question_count: int) -> dict:
     """Uses the Agno Quiz Generator Agent to produce summary + flashcards."""
+    from agno.agent import Agent
+    from agno.models.openai import OpenAIChat
+
     agent = Agent(
         model=OpenAIChat(id="gpt-4o-mini", api_key=settings.openai_api_key),
-        system_prompt=QUIZ_SYSTEM_PROMPT,
+        system_message=QUIZ_SYSTEM_PROMPT,
     )
 
     prompt = (
-        f"TranscriÃ§Ã£o do vÃ­deo:\n\n{transcript}\n\n"
-        f"Gere exatamente {question_count} flashcards com base nesta transcriÃ§Ã£o."
+        f"Transcricao do video:\n\n{transcript}\n\n"
+        f"Gere exatamente {question_count} flashcards com base nesta transcricao."
     )
 
     response = await agent.arun(prompt)
-    return validate_quiz_payload(json.loads(response.content), question_count)
+
+    content = response.content
+    if isinstance(content, dict):
+        payload = content
+    elif isinstance(content, str):
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError("Quiz agent returned invalid JSON.") from exc
+    else:
+        raise ValueError("Quiz agent returned an unsupported content format.")
+
+    return validate_quiz_payload(payload, question_count)
