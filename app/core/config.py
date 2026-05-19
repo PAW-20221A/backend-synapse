@@ -7,11 +7,14 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
+    # CORS (comma-separated origins)
+    cors_origins: str = "http://localhost:5173"
+
     # Database
     database_url: str | None = None
-    postgres_user: str
-    postgres_password: str
-    postgres_db: str
+    postgres_user: str = ""
+    postgres_password: str = ""
+    postgres_db: str = ""
     postgres_host: str = "postgres"
     postgres_port: int = 5432
 
@@ -30,13 +33,28 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
     @model_validator(mode="after")
     def build_database_url(self) -> "Settings":
-        if not self.database_url:
-            self.database_url = (
-                f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
-                f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        if self.database_url:
+            url = self.database_url
+            if url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+            self.database_url = url
+            return self
+
+        if not (self.postgres_user and self.postgres_password and self.postgres_db):
+            raise ValueError(
+                "Defina DATABASE_URL ou POSTGRES_USER, POSTGRES_PASSWORD e POSTGRES_DB."
             )
+
+        self.database_url = (
+            f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
         return self
 
 
